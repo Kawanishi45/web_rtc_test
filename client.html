@@ -17,9 +17,12 @@
     var pc = new RTCPeerConnection();
     var audio = document.querySelector('audio');
 
-    document.getElementById('createOffer').onclick = async () => {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    // メディアの取得とトラックの追加
+    navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(stream => {
         stream.getTracks().forEach(track => pc.addTrack(track, stream));
+    });
+
+    document.getElementById('createOffer').onclick = async () => {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         document.getElementById('localSdp').value = offer.sdp;
@@ -44,7 +47,7 @@
     };
 
     pc.ontrack = (event) => {
-        if (audio.srcObject !== event.streams[0]) {
+        if (!audio.srcObject) {
             audio.srcObject = event.streams[0];
             console.log('Audio track added.');
         }
@@ -56,5 +59,6 @@
         }
     };
 </script>
+
 </body>
 </html>
