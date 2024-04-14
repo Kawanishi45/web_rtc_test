@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebRTC Audio Call</title>
+</head>
+<body>
+<h2>WebRTC Audio Call Demo</h2>
+<textarea id="localSdp" placeholder="Local SDP will appear here..." rows="6" cols="45" readonly></textarea><br>
+<button id="createOffer">Create Offer</button>
+<button id="setAnswer">Set Answer</button><br>
+<textarea id="remoteSdp" placeholder="Paste Remote SDP here..." rows="6" cols="45"></textarea><br>
+<button id="createAnswer">Create Answer</button>
+<button id="setOffer">Set Offer</button><br>
+<audio controls autoplay></audio>
+
+<script>
+    var pc = new RTCPeerConnection();
+    var audio = document.querySelector('audio');
+
+    document.getElementById('createOffer').onclick = async () => {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        stream.getTracks().forEach(track => pc.addTrack(track, stream));
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        document.getElementById('localSdp').value = offer.sdp;
+    };
+
+    document.getElementById('setAnswer').onclick = async () => {
+        const answerSDP = document.getElementById('remoteSdp').value;
+        await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSDP }));
+    };
+
+    document.getElementById('createAnswer').onclick = async () => {
+        const offerSDP = document.getElementById('remoteSdp').value;
+        await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: offerSDP }));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        document.getElementById('localSdp').value = answer.sdp;
+    };
+
+    document.getElementById('setOffer').onclick = async () => {
+        const offerSDP = document.getElementById('remoteSdp').value;
+        await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: offerSDP }));
+    };
+
+    pc.ontrack = (event) => {
+        if (audio.srcObject !== event.streams[0]) {
+            audio.srcObject = event.streams[0];
+            console.log('Audio track added.');
+        }
+    };
+
+    pc.onicecandidate = (event) => {
+        if (event.candidate) {
+            console.log('ICE candidate:', event.candidate);
+        }
+    };
+</script>
+</body>
+</html>
