@@ -17,10 +17,9 @@
     var pc = new RTCPeerConnection();
     var audio = document.querySelector('audio');
 
-    // メディアの取得とトラックの追加
     navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(stream => {
         stream.getTracks().forEach(track => pc.addTrack(track, stream));
-    });
+    }).catch(error => console.error('Error accessing media devices.', error));
 
     document.getElementById('createOffer').onclick = async () => {
         const offer = await pc.createOffer();
@@ -47,9 +46,15 @@
     };
 
     pc.ontrack = (event) => {
-        if (!audio.srcObject) {
+        if (audio.srcObject !== event.streams[0]) {
             audio.srcObject = event.streams[0];
-            console.log('Audio track added.');
+        }
+    };
+
+    pc.oniceconnectionstatechange = (event) => {
+        console.log(`ICE connection state: ${pc.iceConnectionState}`);
+        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+            console.log('ICE Connection is successful and audio should start playing.');
         }
     };
 
@@ -59,6 +64,7 @@
         }
     };
 </script>
+
 
 </body>
 </html>
