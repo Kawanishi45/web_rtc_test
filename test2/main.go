@@ -44,6 +44,11 @@ func main() {
 }
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
+	// CORS ヘッダの設定
+	w.Header().Set("Access-Control-Allow-Origin", "*") // 本番環境では具体的なドメイン名を指定することが推奨されます
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
 	// WebSocket接続を確立
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {

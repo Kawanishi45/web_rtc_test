@@ -8,7 +8,7 @@ let localStream;
 let remoteStream;
 let peerConnection;
 // const serverUrl = 'ws://10.16.4.135:8080/ws'; // 適切なサーバーURLを使用してください
-const serverUrl = 'ws://e3ec-217-178-107-208.ngrok-free.app/ws'; // 適切なサーバーURLを使用してください
+const serverUrl = 'wss://e3ec-217-178-107-208.ngrok-free.app/ws'; // 適切なサーバーURLを使用してください
 let ws;
 
 const configuration = {
