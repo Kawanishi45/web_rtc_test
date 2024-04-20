@@ -54,8 +54,8 @@ func main() {
 	})
 
 	// HTTPサーバーの起動
-	log.Println("HTTP server started on 0.0.0.0:8080")
-	if err := http.ListenAndServe("0.0.0.0:8080", nil); err != nil {
+	log.Println("HTTP server started on :8080")
+	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatalf("Failed to start HTTP server: %v", err)
 	}
 }

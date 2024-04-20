@@ -17,14 +17,18 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-// Message メッセージの構造体
+type RTCSessionDescription struct {
+	Type string `json:"type"`
+	Sdp  string `json:"sdp"`
+}
+
 type Message struct {
-	Type      string `json:"type"`
-	Offer     string `json:"offer,omitempty"`
-	Answer    string `json:"answer,omitempty"`
-	Candidate string `json:"candidate,omitempty"`
-	From      string `json:"from"`
-	To        string `json:"to"`
+	Type      string                 `json:"type"`
+	Offer     *RTCSessionDescription `json:"offer,omitempty"`
+	Answer    *RTCSessionDescription `json:"answer,omitempty"`
+	Candidate string                 `json:"candidate,omitempty"`
+	From      string                 `json:"from"`
+	To        string                 `json:"to"`
 }
 
 func main() {
@@ -32,8 +36,8 @@ func main() {
 
 	go handleMessages()
 
-	fmt.Println("Server started on :8080")
-	err := http.ListenAndServe(":8080", nil)
+	fmt.Println("Server started on 0.0.0.0:8080")
+	err := http.ListenAndServe("0.0.0.0:8080", nil)
 	if err != nil {
 		fmt.Println("Error starting server:", err)
 	}
@@ -49,11 +53,16 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	defer ws.Close()
 
 	// クライアントを登録
-	clients[ws] = r.URL.Query().Get("userId")
+	userIdStr := r.URL.Query().Get("userId")
+	if userIdStr == "" {
+		fmt.Println("Error getting userId")
+		return
+	}
+	clients[ws] = userIdStr
 
-	log.Println("\nClient connected:", r.URL.Query().Get("userId"))
+	log.Println("\n\nClient connected:", r.URL.Query().Get("userId"))
 
-	log.Println("\nClients:", clients)
+	log.Println("\n\nClients:", clients)
 
 	for {
 		var msg Message
@@ -61,11 +70,12 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		err := ws.ReadJSON(&msg)
 		if err != nil {
 			fmt.Println("Error reading json:", err)
+			log.Println(msg)
 			delete(clients, ws)
 			break
 		}
 
-		log.Println("\nReceived message:", msg)
+		log.Println("\n\nReceived message:", msg)
 
 		// 受信したメッセージをブロードキャストチャンネルに送信
 		broadcast <- msg
@@ -78,6 +88,8 @@ func handleMessages() {
 
 		// メッセージを適切なクライアントに送信
 		for client, userId := range clients {
+			log.Println("userId", userId)
+			log.Println("msg.To", msg.To)
 			if userId == msg.To {
 				err := client.WriteJSON(msg)
 				if err != nil {

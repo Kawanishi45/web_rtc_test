@@ -7,7 +7,21 @@
 <h2>WebRTC Video Call Demo</h2>
 <video id="localVideo" autoplay muted></video>
 <video id="remoteVideo" autoplay></video>
-<button id="startButton">Start Call</button>
+<ul>
+    <li>
+        <button id="startAs1Button">Start As 1 Call</button>
+        <button id="startAs2Button">Start As 2 Call</button>
+    </li>
+    <li>
+        <button id="offerAs1Button">Offer As 1 Call</button>
+        <button id="answerAs2Button">Answer As 2 Call</button>
+    </li>
+    <li>
+        <button id="candidateAs1Button">ICE As 1 Call</button>
+        <button id="candidateAs2Button">ICE As 2 Call</button>
+    </li>
+    <li>Remote: <span id="remoteSdp"></span></li>
+</ul>
 <script src="webrtc.js"></script>
 </body>
 </html>
