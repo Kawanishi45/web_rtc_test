@@ -6,8 +6,8 @@ let localStream;
 let remoteStream;
 let peerConnection;
 // const serverUrl = 'ws://localhost:8080/ws'; // WebSocketサーバーのURL
-// const serverUrl = 'ws://10.16.4.135:8080/ws'; // WebSocketサーバーのURL
-const serverUrl = 'ws://9b37-217-178-107-208.ngrok-free.app/ws'; // WebSocketサーバーのURL
+const serverUrl = 'ws://10.16.4.135:8080/ws'; // WebSocketサーバーのURL
+// const serverUrl = 'ws://9b37-217-178-107-208.ngrok-free.app/ws'; // WebSocketサーバーのURL
 let ws;
 
 const configuration = {
