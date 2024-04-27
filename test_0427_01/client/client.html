@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebRTC Audio Call</title>
+</head>
+<body>
+<h2>WebRTC Audio Call Test</h2>
+<button id="startCall">Start Call</button>
+
+<script>
+  const startCallButton = document.getElementById('startCall');
+  startCallButton.addEventListener('click', () => {
+    let peerConnection = new RTCPeerConnection();
+
+    // Handle ICE candidates
+    let allCandidatesCollectedPromise = new Promise(resolve => {
+      peerConnection.onicecandidate = event => {
+        if (!event.candidate) {
+          console.log("All ICE candidates have been collected.");
+          resolve();
+        }
+      };
+    });
+
+    const ws = new WebSocket('ws://localhost:8080/ws');
+    ws.onopen = async () => {
+      console.log("WebSocket connection established.");
+
+      // Create an offer to start the call
+      try {
+        // Offerを生成
+        let offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        console.log('Offer created and set as local description:', offer);
+        // ICE Gatheringが完了したらOfferを送信
+        peerConnection.onicecandidate = event => {
+          if (event.candidate === null) { // ICE Gatheringが完了
+            console.log('ICE Gathering Complete', peerConnection.localDescription);
+            send({ type: 'offer', offer: peerConnection.localDescription, to: 'user2', from: 'user1' }); // Offerを送信
+          }
+        };
+        // let offer = await peerConnection.createOffer();
+        // await peerConnection.setLocalDescription(offer);
+        //
+        // // Wait for all ICE candidates to be gathered
+        // await allCandidatesCollectedPromise;
+        //
+        // // Then send the complete offer with ICE candidates
+        // console.log("Sending complete offer:", JSON.stringify(peerConnection.localDescription));
+        // ws.send(JSON.stringify(peerConnection.localDescription));
+      } catch (error) {
+        console.error('Failed to create offer or set local description:', error);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    ws.onmessage = async (message) => {
+      const remoteDesc = JSON.parse(message.data);
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(remoteDesc));
+    };
+
+    // Log any received ICE candidates from the signaling server
+    peerConnection.onicecandidate = event => {
+      if (event.candidate) {
+        console.log('New ICE candidate:', event.candidate);
+      }
+    };
+
+    // Handle remote tracks
+    peerConnection.ontrack = event => {
+      const [remoteStream] = event.streams;
+      if (remoteStream) {
+        console.log('Remote stream received');
+        // Here you could attach the remoteStream to an HTML audio element to play it
+      }
+    };
+  });
+</script>
+</body>
+</html>

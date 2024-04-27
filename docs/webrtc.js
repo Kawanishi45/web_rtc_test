@@ -7,8 +7,9 @@ let offerAs1Button = document.getElementById('offerAs1Button');
 let localStream;
 let remoteStream;
 let peerConnection;
+const serverUrl = 'ws://localhost:8080/ws'; // 適切なサーバーURLを使用してください
 // const serverUrl = 'ws://10.16.4.135:8080/ws'; // 適切なサーバーURLを使用してください
-const serverUrl = 'wss://e3ec-217-178-107-208.ngrok-free.app/ws'; // 適切なサーバーURLを使用してください
+// const serverUrl = 'wss://e3ec-217-178-107-208.ngrok-free.app/ws'; // 適切なサーバーURLを使用してください
 let ws;
 
 const configuration = {
@@ -62,6 +63,59 @@ offerAs1Button.onclick = async () => {
     };
 };
 
+peerConnection.onconnectionstatechange = function(event) {
+    console.log(`Connection State: ${peerConnection.connectionState}`);
+    if (peerConnection.connectionState === 'connected') {
+        console.log('The connection has been fully established!');
+    }
+};
+
+// ontrackイベントハンドラーを設定
+peerConnection.ontrack = function(event) {
+    console.log('Track received!');
+    const mediaStream = event.streams[0];
+
+    if (mediaStream && mediaStream.getAudioTracks().length > 0) {
+        console.log('Audio track received');
+
+        // オーディオトラックをHTMLのaudio要素にセットして再生
+        const audioElement = document.createElement('audio');
+        audioElement.srcObject = mediaStream;
+        audioElement.play();
+
+        // 再生を確認
+        audioElement.onplaying = () => {
+            console.log('Audio is playing');
+        };
+
+        // エラーを監視
+        audioElement.onerror = (e) => {
+            console.error('Error playing audio:', e);
+        };
+
+        // 音声データを確認するためのユーザーインターフェイスに追加
+        document.body.appendChild(audioElement);
+    }
+
+    const audioContext = new AudioContext();
+    const mediaStreamSource = audioContext.createMediaStreamSource(event.streams[0]);
+    const analyzer = audioContext.createAnalyser();
+
+    mediaStreamSource.connect(analyzer);
+    analyzer.fftSize = 2048;
+    const bufferLength = analyzer.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    function analyzeAudio() {
+        requestAnimationFrame(analyzeAudio);
+        analyzer.getByteTimeDomainData(dataArray);
+        // ここで dataArray を使用して音声データの分析を行う
+        console.log(dataArray); // 波形データの生の値をログに出力
+    }
+
+    analyzeAudio();
+};
+
 function createPeerConnection() {
     peerConnection = new RTCPeerConnection(configuration);
     localStream.getTracks().forEach(track => {
@@ -93,19 +147,56 @@ async function handleMessage(message) {
 
     switch (data.type) {
         case 'offer':
+            console.log('Received offer:', data.offer);
             await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
             let answer = await peerConnection.createAnswer();
             await peerConnection.setLocalDescription(answer);
             send({ type: 'answer', answer: answer, to: data.from });
             break;
         case 'answer':
+            console.log('Received answer:', data.answer);
+            // const sdpType = data[data.type].type; // Ensure this exists and is correct
+            //             const sdp = data[data.type].sdp; // Ensure SDP exists
+            //             if (sdpType && (sdpType === 'offer' || sdpType === 'answer' || sdpType === 'pranswer' || sdpType === 'rollback') && sdp) {
+            //                 const sessionDescription = new RTCSessionDescription({
+            //                     type: sdpType,
+            //                     sdp: sdp
+            //                 });
+            //                 await peerConnection.setRemoteDescription(sessionDescription);
+            //                 if (sdpType === 'offer') {
+            //                     const answer = await peerConnection.createAnswer();
+            //                     await peerConnection.setLocalDescription(answer);
+            //                     send({ type: 'answer', answer: answer, to: data.from });
+            //                 }
+            //             } else {
+            //                 console.error('Invalid SDP type or missing SDP:', sdpType);
+            //             }
             await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+            // console.log('Received answer:', data);
+            // await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
+            console.log('setRemoteDescription');
             break;
+        // case 'candidate':
+        //     console.log('Received ICE candidate:', data.candidate);
+        //     try {
+        //         await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+        //     } catch (e) {
+        //         console.error('Error adding received ice candidate:', e);
+        //     }
+        //     break;
         case 'candidate':
-            try {
-                await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-            } catch (e) {
-                console.error('Error adding received ice candidate:', e);
+            if (data.candidate) {
+                console.log('Received ICE candidate:', data.candidate);
+                try {
+                    const iceCandidate = new RTCIceCandidate({
+                        candidate: data.candidate.candidate,
+                        sdpMid: data.candidate.sdpMid,
+                        sdpMLineIndex: data.candidate.sdpMLineIndex
+                    });
+                    await peerConnection.addIceCandidate(iceCandidate);
+                } catch (e) {
+                    console.error('Error adding received ice candidate:', e);
+                }
             }
             break;
     }
