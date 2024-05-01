@@ -5,6 +5,7 @@ import (
   "fmt"
   "github.com/gorilla/websocket"
   "github.com/pion/webrtc/v3"
+  "layeh.com/gopus"
   "log"
   "net/http"
   "os"
@@ -59,9 +60,31 @@ func main() {
     defer peerConnection.Close()
 
     // Opusファイルを読み込み
-    fileData, err := os.ReadFile("/Users/shogo/ss/web_rtc_test/test_0427_01/server/opus128.opus")
+    fileData, err := os.ReadFile("/Users/shogo/ss/web_rtc_test/test_0427_01/server/output_wav.opus")
     if err != nil {
       log.Println("Failed to read opus file:", err)
+      return
+    }
+
+    //// ここでOpusファイルをフレームに分割する処理を実装する
+    //// 仮のフレームサイズ（例えば960バイト）
+    //frameSize := 960
+    //numFrames := len(fileData) / frameSize
+
+    // デコーダの作成
+    decoder, err := gopus.NewDecoder(48000, 2) // 48000 Hz, 2 channels
+    if err != nil {
+      fmt.Println("Failed to create opus decoder:", err)
+      return
+    }
+
+    // 仮にOpusパケットがこのデータだとする（実際にはパケットごとに分割が必要）
+    opusPacket := fileData // これは例として、実際には適切なOpusパケットを使用する
+
+    // Opusデータのデコード
+    pcm, err := decoder.Decode(opusPacket, 960, false)
+    if err != nil {
+      fmt.Println("Failed to decode opus data:", err)
       return
     }
 
@@ -106,16 +129,16 @@ func main() {
         //conn.WriteMessage(websocket.TextMessage, b)
       }
 
-      // クライアントへの音声送信
-      go func() {
-        ticker := time.NewTicker(20 * time.Millisecond) // 20msごとに送信
-        for range ticker.C {
-          //if err := localTrack.WriteRTP(media.Sample{Data: fileData, Duration: time.Second}); err != nil {
-          //  log.Println("Error writing audio data:", err)
-          //  break
-          //}
-        }
-      }()
+      //// クライアントへの音声送信
+      //go func() {
+      //  ticker := time.NewTicker(20 * time.Millisecond) // 20msごとに送信
+      //  for range ticker.C {
+      //    //if err := localTrack.WriteRTP(media.Sample{Data: fileData, Duration: time.Second}); err != nil {
+      //    //  log.Println("Error writing audio data:", err)
+      //    //  break
+      //    //}
+      //  }
+      //}()
     })
 
     // Monitoring sender state (replace with actual monitoring/logging as needed)
@@ -216,19 +239,36 @@ func main() {
         //    }
         //  }
         //}()
+        // オーディオデータをデコードしてWebRTCトラックに書き込む
         go func() {
           for {
-            i, _, readErr := remoteTrack.Read(fileData)
-            if readErr != nil {
-              fmt.Println("Error reading from track:", readErr)
-              return
-            }
-            if _, writeErr := localTrack.Write(fileData[:i]); writeErr != nil {
+
+            // PCMデータをバイト配列に変換（必要に応じて）
+            byteBuffer := convertInt16ToBytes(pcm) // この関数はPCMデータを適切な形式に変換する
+
+            // WebRTCトラックにフレームを書き込む
+            if _, writeErr := localTrack.Write(byteBuffer); writeErr != nil {
               fmt.Println("Error writing to track:", writeErr)
               return
             }
+
+            // 20ミリ秒ごとにフレームを送信
+            time.Sleep(20 * time.Millisecond)
           }
         }()
+        //go func() {
+        //  for {
+        //    i, _, readErr := remoteTrack.Read(fileData)
+        //    if readErr != nil {
+        //      fmt.Println("Error reading from track:", readErr)
+        //      return
+        //    }
+        //    if _, writeErr := localTrack.Write(fileData[:i]); writeErr != nil {
+        //      fmt.Println("Error writing to track:", writeErr)
+        //      return
+        //    }
+        //  }
+        //}()
       }
       //// Write the buffer to the track
       //_, writeErr := localTrack.Write(fileData)
@@ -356,6 +396,19 @@ func main() {
   })
 
   http.ListenAndServe(":8080", nil)
+}
+
+func convertInt16ToBytes(input []int16) []byte {
+  numSamples := len(input)
+  output := make([]byte, numSamples*2) // 16ビット整数なので、サンプル数の2倍のバイト数が必要
+
+  for i, sample := range input {
+    // リトルエンディアン形式でバイト配列に変換
+    output[i*2] = byte(sample & 0xFF)          // 下位バイト
+    output[i*2+1] = byte((sample >> 8) & 0xFF) // 上位バイト
+  }
+
+  return output
 }
 
 func Decode(data interface{}, v interface{}) error {
