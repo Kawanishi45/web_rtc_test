@@ -4,8 +4,9 @@ go 1.21.3
 
 require (
 	github.com/gorilla/websocket v1.5.1
+	github.com/hajimehoshi/go-mp3 v0.3.4
+	github.com/hraban/opus v0.0.0-20230925203106-0188a62cb302
 	github.com/pion/webrtc/v3 v3.2.38
-	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32
 )
 
 require (

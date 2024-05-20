@@ -1,11 +1,14 @@
 package main
 
 import (
+  "encoding/binary"
   "encoding/json"
   "fmt"
   "github.com/gorilla/websocket"
+  "github.com/hajimehoshi/go-mp3"
+  "github.com/hraban/opus"
   "github.com/pion/webrtc/v3"
-  "layeh.com/gopus"
+  "github.com/pion/webrtc/v3/pkg/media"
   "log"
   "net/http"
   "os"
@@ -52,93 +55,59 @@ func main() {
     }
     defer conn.Close()
 
-    peerConnection, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+    // MediaEngine に Opus コーデックを登録
+    // MediaEngine を初期化して Opus を登録
+    m := webrtc.MediaEngine{}
+    if err := m.RegisterCodec(webrtc.RTPCodecParameters{
+      RTPCodecCapability: webrtc.RTPCodecCapability{
+        MimeType:    webrtc.MimeTypeOpus,
+        ClockRate:   48000,
+        Channels:    2,
+        SDPFmtpLine: "minptime=10;useinbandfec=1",
+      },
+      PayloadType: 111,
+    }, webrtc.RTPCodecTypeAudio); err != nil {
+      log.Fatal("Failed to register codec: ", err)
+    }
+
+    // API オブジェクトの作成
+    api := webrtc.NewAPI(webrtc.WithMediaEngine(&m))
+
+    peerConnection, err := api.NewPeerConnection(webrtc.Configuration{
+      ICEServers: []webrtc.ICEServer{
+        {
+          URLs: []string{"stun:stun.l.google.com:19302"},
+        },
+      },
+    })
     if err != nil {
       fmt.Println("Error creating PeerConnection:", err)
       return
     }
-    defer peerConnection.Close()
+    //defer peerConnection.Close()
 
-    // Opusファイルを読み込み
-    fileData, err := os.ReadFile("/Users/shogo/ss/web_rtc_test/test_0427_01/server/output_wav.opus")
+    // 音声トラックの作成
+    localTrack, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus}, "audio", "pion")
     if err != nil {
-      log.Println("Failed to read opus file:", err)
-      return
+      log.Fatal(err)
     }
+    //// 音声トラックの作成
+    //    localTrack, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus}, "audio", "pion")
+    //    if err != nil {
+    //      log.Fatal(err)
+    //    }
 
-    //// ここでOpusファイルをフレームに分割する処理を実装する
-    //// 仮のフレームサイズ（例えば960バイト）
-    //frameSize := 960
-    //numFrames := len(fileData) / frameSize
-
-    // デコーダの作成
-    decoder, err := gopus.NewDecoder(48000, 2) // 48000 Hz, 2 channels
+    // トラックをPeer connectionに追加
+    _, err = peerConnection.AddTrack(localTrack)
     if err != nil {
-      fmt.Println("Failed to create opus decoder:", err)
-      return
-    }
-
-    // 仮にOpusパケットがこのデータだとする（実際にはパケットごとに分割が必要）
-    opusPacket := fileData // これは例として、実際には適切なOpusパケットを使用する
-
-    // Opusデータのデコード
-    pcm, err := decoder.Decode(opusPacket, 960, false)
-    if err != nil {
-      fmt.Println("Failed to decode opus data:", err)
-      return
-    }
-
-    // ここでメディアトラックを作成
-    // Prepare to echo back audio
-    localTrack, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{
-      MimeType:    "audio/opus",
-      ClockRate:   48000,
-      Channels:    2,
-      SDPFmtpLine: "minptime=10;useinbandfec=1",
-    }, "audio", "server-audio-track")
-    if err != nil {
-      log.Println("Error creating local audio track:", err)
-      return
-    }
-
-    // Add this remoteTrack to the connection
-    if _, err = peerConnection.AddTrack(localTrack); err != nil {
-      fmt.Println("Error adding local remoteTrack:", err)
-      return
+      log.Fatal(err)
     }
 
     peerConnection.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
       fmt.Printf("Connection State has changed: %s\n", state.String())
       if state == webrtc.PeerConnectionStateConnected {
         log.Printf("Detect Connected!")
-        //log.Printf("Detect Connected ! send candidate")
-        //// candidateメッセージを送信
-        //message := &Message{
-        //  Type: "candidate",
-        //  Candidate: &Candidate{
-        //    Candidate:     "candidate",
-        //    SdpMid:        "sdpMid",
-        //    SdpMLineIndex: 0,
-        //  },
-        //  From: "user2",
-        //}
-        //b, err := json.Marshal(message)
-        //if err != nil {
-        //  log.Fatal(err)
-        //}
-        //conn.WriteMessage(websocket.TextMessage, b)
       }
-
-      //// クライアントへの音声送信
-      //go func() {
-      //  ticker := time.NewTicker(20 * time.Millisecond) // 20msごとに送信
-      //  for range ticker.C {
-      //    //if err := localTrack.WriteRTP(media.Sample{Data: fileData, Duration: time.Second}); err != nil {
-      //    //  log.Println("Error writing audio data:", err)
-      //    //  break
-      //    //}
-      //  }
-      //}()
     })
 
     // Monitoring sender state (replace with actual monitoring/logging as needed)
@@ -163,9 +132,6 @@ func main() {
       if candidateData.SDPMid != nil {
         sdpMid = *candidateData.SDPMid
       }
-      //if sdpMid == "" {
-      //  sdpMid = "default"
-      //}
 
       sdpMLineIndex := 0 // 通常、デフォルトとして 0 を使用
       log.Printf("*candidateData.SDPMLineIndex: %+v", *candidateData.SDPMLineIndex)
@@ -189,15 +155,34 @@ func main() {
       conn.WriteMessage(websocket.TextMessage, b)
       log.Println("send candidate.")
     })
+    //
+    //// go func()で10秒おきにpcのStatsを出力
+    //go func() {
+    //  ticker := time.NewTicker(10 * time.Second)
+    //  for range ticker.C {
+    //    status := peerConnection.ConnectionState().String()
+    //    log.Printf("Report: %s", status)
+    //  }
+    //}()
 
-    // go func()で10秒おきにpcのStatsを出力
-    go func() {
-      ticker := time.NewTicker(10 * time.Second)
-      for range ticker.C {
-        status := peerConnection.ConnectionState().String()
-        log.Printf("Report: %s", status)
-      }
-    }()
+    // mp3ファイルを読み込む
+    file, err := os.Open("/Users/shogo/ss/web_rtc_test/test_0427_01/server/hana.mp3")
+    if err != nil {
+      panic(err)
+    }
+    defer file.Close()
+
+    // mp3デコーダの作成
+    mp3Decoder, err := mp3.NewDecoder(file)
+    if err != nil {
+      panic(err)
+    }
+
+    // Opusエンコーダの設定
+    opusEncoder, err := opus.NewEncoder(mp3Decoder.SampleRate(), 2, opus.AppAudio)
+    if err != nil {
+      panic(err)
+    }
 
     // Handle tracks
     peerConnection.OnTrack(func(remoteTrack *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
@@ -210,106 +195,61 @@ func main() {
       log.Println("remoteTrack.StreamID()")
       log.Println(remoteTrack.StreamID())
 
-      //// Prepare to echo back audio
-      //localTrack, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: "audio/opus"}, "audio", "some-random-id")
-      //if err != nil {
-      //  fmt.Println("Error creating local remoteTrack:", err)
-      //  return
-      //}
-      //
-      //// Add this remoteTrack to the connection
-      //if _, err = peerConnection.AddTrack(localTrack); err != nil {
-      //  fmt.Println("Error adding local remoteTrack:", err)
-      //  return
-      //}
-
       // Echo back the audio
       if remoteTrack.Kind() == webrtc.RTPCodecTypeAudio {
-        //go func() {
-        //  buf := make([]byte, 1500)
-        //  for {
-        //    i, _, readErr := remoteTrack.Read(buf)
-        //    if readErr != nil {
-        //      fmt.Println("Error reading from track:", readErr)
-        //      return
-        //    }
-        //    if _, writeErr := localTrack.Write(buf[:i]); writeErr != nil {
-        //      fmt.Println("Error writing to track:", writeErr)
-        //      return
-        //    }
-        //  }
-        //}()
-        // オーディオデータをデコードしてWebRTCトラックに書き込む
         go func() {
+          // ここでバッファの大きさを調整
+          frameSize := 960 // Opusエンコーダのフレームサイズに依存
+          pcmBuf := make([]int16, frameSize)
+          byteBuf := make([]byte, frameSize*2) // 2 bytes per int16
           for {
-
-            // PCMデータをバイト配列に変換（必要に応じて）
-            byteBuffer := convertInt16ToBytes(pcm) // この関数はPCMデータを適切な形式に変換する
-
-            // WebRTCトラックにフレームを書き込む
-            if _, writeErr := localTrack.Write(byteBuffer); writeErr != nil {
-              fmt.Println("Error writing to track:", writeErr)
-              return
+            // mp3からPCMデータを読み込む（byte形式）
+            var n int
+            n, err = mp3Decoder.Read(byteBuf)
+            if err != nil {
+              break
             }
 
-            // 20ミリ秒ごとにフレームを送信
-            time.Sleep(20 * time.Millisecond)
+            // byteからint16に変換
+            for i := 0; i < n/2; i++ {
+              pcmBuf[i] = int16(binary.LittleEndian.Uint16(byteBuf[i*2 : (i*2)+2]))
+            }
+
+            // Opusにエンコード
+            opusData := make([]byte, 1000)
+            n, err = opusEncoder.Encode(pcmBuf[:n/2], opusData)
+            if err != nil {
+              break
+            }
+
+            // RTPパケットを送信
+            err = localTrack.WriteSample(media.Sample{Data: opusData[:n], Duration: time.Millisecond * 20})
+            if err != nil {
+              break
+            }
           }
         }()
-        //go func() {
-        //  for {
-        //    i, _, readErr := remoteTrack.Read(fileData)
-        //    if readErr != nil {
-        //      fmt.Println("Error reading from track:", readErr)
-        //      return
-        //    }
-        //    if _, writeErr := localTrack.Write(fileData[:i]); writeErr != nil {
-        //      fmt.Println("Error writing to track:", writeErr)
-        //      return
-        //    }
-        //  }
-        //}()
       }
-      //// Write the buffer to the track
-      //_, writeErr := localTrack.Write(fileData)
-      //if writeErr != nil {
-      //  panic(writeErr)
+      //// Echo back the audio
+      //if remoteTrack.Kind() == webrtc.RTPCodecTypeAudio {
+      //  go func() {
+      //    buf := make([]byte, 1500)
+      //    for {
+      //      i, _, readErr := remoteTrack.Read(buf)
+      //      if readErr != nil {
+      //        fmt.Println("Error reading from track:", readErr)
+      //        return
+      //      }
+      //      if _, writeErr := localTrack.Write(buf[:i]); writeErr != nil {
+      //        fmt.Println("Error writing to track:", writeErr)
+      //        return
+      //      }
+      //    }
+      //  }()
       //}
     })
 
-    //peerConnection.OnTrack(func(remoteTrack *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-    // fmt.Printf("Received a remote track: %s\n", remoteTrack.ID())
-    //
-    // localTrackHelper, err := webrtc.NewTrackLocalStaticRTP(remoteTrack.Codec().RTPCodecCapability, remoteTrack.ID(), remoteTrack.StreamID())
-    // if err != nil {
-    //   fmt.Println(err)
-    // }
-    //
-    // rtpBuf := make([]byte, 1400)
-    // go func() {
-    //   for {
-    //     i, _, readErr := remoteTrack.Read(rtpBuf)
-    //     if readErr != nil {
-    //       panic(readErr)
-    //     }
-    //
-    //     //// Log the received data size
-    //     //fmt.Printf("Received %d bytes of data\n", i)
-    //     //
-    //     //// Introduce a delay to simulate network latency
-    //     //time.Sleep(500 * time.Millisecond) // 500 milliseconds delay
-    //
-    //     if _, err = localTrackHelper.Write(rtpBuf[:i]); err != nil && !errors.Is(err, io.ErrClosedPipe) {
-    //       panic(err)
-    //     }
-    //   }
-    // }()
-    //
-    // _, err = peerConnection.AddTrack(localTrackHelper)
-    // if err != nil {
-    //   return
-    // }
-    //})
+    log.Println()
 
     // Handle incoming WebSocket messages
     for {
@@ -339,13 +279,6 @@ func main() {
         log.Println("Unknown message type")
       }
 
-      //// Unmarshal the JSON into webrtc.SessionDescription
-      //var offer webrtc.SessionDescription
-      //if err := json.Unmarshal(message, &offer); err != nil {
-      //  log.Println("Error unmarshaling SDP offer:", err)
-      //  continue
-      //}
-
       // 'offer' キーが存在するかチェック
       offerData, ok := msg["offer"]
       if !ok {
@@ -359,6 +292,14 @@ func main() {
         log.Println(err)
         return
       }
+
+      log.Println("offer.Type", offer.Type)
+      log.Println("offer.Type.String", offer.Type.String())
+      //log.Println("offer.SDP", offer.SDP)
+
+      offer.Type = webrtc.SDPTypeOffer
+      log.Println("offer.Type", offer.Type)
+      log.Println("offer.Type.String", offer.Type.String())
 
       // Set the remote description to the incoming offer
       if err := peerConnection.SetRemoteDescription(offer); err != nil {
@@ -396,19 +337,6 @@ func main() {
   })
 
   http.ListenAndServe(":8080", nil)
-}
-
-func convertInt16ToBytes(input []int16) []byte {
-  numSamples := len(input)
-  output := make([]byte, numSamples*2) // 16ビット整数なので、サンプル数の2倍のバイト数が必要
-
-  for i, sample := range input {
-    // リトルエンディアン形式でバイト配列に変換
-    output[i*2] = byte(sample & 0xFF)          // 下位バイト
-    output[i*2+1] = byte((sample >> 8) & 0xFF) // 上位バイト
-  }
-
-  return output
 }
 
 func Decode(data interface{}, v interface{}) error {

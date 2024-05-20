@@ -1,0 +1,10 @@
+github.com/gorilla/websocket v1.5.1 h1:gmztn0JnHVt9JZquRuzLw3g4wouNVzKL15iLr/zn/QY=
+github.com/gorilla/websocket v1.5.1/go.mod h1:x3kM2JMyaluk02fnUJpQuwD2dCS5NDG2ZHL0uE0tcaY=
+github.com/pion/randutil v0.1.0 h1:CFG1UdESneORglEsnimhUjf33Rwjubwj6xfiOXBa3mA=
+github.com/pion/randutil v0.1.0/go.mod h1:XcJrSMMbbMRhASFVOlj/5hQial/Y8oH/HVo7TBZq+j8=
+github.com/pion/rtp v1.8.5 h1:uYzINfaK+9yWs7r537z/Rc1SvT8ILjBcmDOpJcTB+OU=
+github.com/pion/rtp v1.8.5/go.mod h1:pBGHaFt/yW7bf1jjWAoUjpSNoDnw98KTMg+jWWvziqU=
+github.com/pion/webrtc/v3 v3.2.38 h1:oA52VJAJhOjSi1JpKjf0CM+cCiZ3b7jBxvsoOiajeDU=
+github.com/pion/webrtc/v3 v3.2.38/go.mod h1:AQ8p56OLbm3MjhYovYdgPuyX6oc+JcKx/HFoCGFcYzA=
+golang.org/x/net v0.22.0 h1:9sGLhx7iRIHEiX0oAJ3MRZMUCElJgy7Br1nO+AMN3Tc=
+golang.org/x/net v0.22.0/go.mod h1:JKghWKKOSdJwpW2GEx0Ja7fmaKnMsbu+MWVZTokSYmg=
